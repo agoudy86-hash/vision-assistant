@@ -1,7 +1,7 @@
 {
-  "name": "vision-assistant",
+  "name": "vision-assistant-free",
   "version": "1.0.0",
   "dependencies": {
-    "openai": "^4.0.0"
+    "node-fetch": "^2.6.7"
   }
 }
