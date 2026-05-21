@@ -62,7 +62,7 @@
                 window.speechSynthesis.speak(utterance);
 
             } catch (error) {
-                status.innerText = "حدث خطأ أثناء محاولة الاتصال بالذكاء الاصطناعي.";
+                status.innerText = "خطأ: " + error.message;
                 console.error(error);
             }
         });
