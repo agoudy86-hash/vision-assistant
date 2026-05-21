@@ -10,21 +10,18 @@ module.exports = async (req, res) => {
         const base64Data = image.replace(/^data:image\/jpeg;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
 
-        // الاتصال بمحرك الصور المجاني
-        const response = await fetch(
-            "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large",
-            {
-                headers: { Authorization: `Bearer ${process.env.HUGGINGFACE_TOKEN}` },
-                method: "POST",
-                body: buffer,
-            }
-        );
+        // إرسال الطلب برابط مدمج وصحيح 100% في سطر واحد
+        const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
+            headers: { Authorization: `Bearer ${process.env.HUGGINGFACE_TOKEN}` },
+            method: "POST",
+            body: buffer,
+        });
 
         const result = await response.json();
         
-        // إذا كان النموذج يستيقظ، سنعيد إرسال الطلب بعد ثوانٍ تلقائياً
+        // إذا كان النموذج يستيقظ لأول مرة
         if (result.error && result.error.includes("loading")) {
-            return res.status(503).json({ description: "الذكاء الاصطناعي يستيقظ الآن.. اضغط مجدداً خلال ثوانٍ" });
+            return res.status(200).json({ description: "الذكاء الاصطناعي يستيقظ الآن.. انتظر 5 ثوانٍ واضغط مجدداً" });
         }
 
         if (!result || !result[0] || !result[0].generated_text) {
@@ -33,7 +30,7 @@ module.exports = async (req, res) => {
 
         let englishDescription = result[0].generated_text;
 
-        // ترجمة الوصف إلى العربية مجاناً تلقائياً
+        // ترجمة فورية ومجانية للعربية
         const translateRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
         const translateJson = await translateRes.json();
         const arabicDescription = translateJson[0][0][0];
