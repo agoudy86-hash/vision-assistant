@@ -1,4 +1,3 @@
-
 const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
@@ -22,6 +21,16 @@ module.exports = async (req, res) => {
         );
 
         const result = await response.json();
+        
+        // إذا كان النموذج يستيقظ، سنعيد إرسال الطلب بعد ثوانٍ تلقائياً
+        if (result.error && result.error.includes("loading")) {
+            return res.status(503).json({ description: "الذكاء الاصطناعي يستيقظ الآن.. اضغط مجدداً خلال ثوانٍ" });
+        }
+
+        if (!result || !result[0] || !result[0].generated_text) {
+            return res.status(500).json({ error: JSON.stringify(result) });
+        }
+
         let englishDescription = result[0].generated_text;
 
         // ترجمة الوصف إلى العربية مجاناً تلقائياً
@@ -33,6 +42,6 @@ module.exports = async (req, res) => {
 
     } catch (error) {
         console.error(error);
-        return res.status(500).json({ error: 'فشل النظام المجاني في معالجة الصورة' });
+        return res.status(500).json({ error: error.message });
     }
 };
