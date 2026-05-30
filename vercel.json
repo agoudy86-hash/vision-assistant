@@ -1,0 +1,9 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/describe",
+      "destination": "/api/describe.js"
+    }
+  ]
+}
