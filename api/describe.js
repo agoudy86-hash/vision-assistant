@@ -1,6 +1,15 @@
 const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
+    // السماح بطلبات الموقع من أي مكان وصيانة الاتصال
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+    }
+
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
@@ -13,35 +22,37 @@ module.exports = async (req, res) => {
 
         const base64Data = image.replace(/^data:image\/jpeg;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
+        
+        // جلب التوكن بأمان من بيئة عمل Vercel
         const token = process.env.HUGGINGFACE_TOKEN ? process.env.HUGGINGFACE_TOKEN.trim() : '';
 
-        // رابط مباشر مستقيم تماماً بدون أي علامات زائدة أو متغيرات مفرقة
-        const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
+        // استخدام الرابط البديل المباشر الصريح لفك أزمة الـ DNS العالمية لـ Vercel
+        const response = await fetch("https://api.hf.co/models/Salesforce/blip-image-captioning-large", {
             headers: { 
                 "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/octet-stream"
             },
             method: "POST",
-            body: buffer,
+            body: buffer
         });
 
         const result = await response.json();
         
         if (result.error && JSON.stringify(result.error).includes("loading")) {
-            return res.status(200).json({ description: "الذكاء الاصطناعي يستيقظ.. انتظر 5 ثوانٍ واضغط مجدداً" });
+            return res.status(200).json({ description: "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً" });
         }
 
         if (result.error) {
-            return res.status(200).json({ description: "تأكد من رمز الحساب: " + JSON.stringify(result.error) });
+            return res.status(200).json({ description: "يرجى المحاولة مرة أخرى بعد ثوانٍ" });
         }
 
         if (!result || !result[0] || !result[0].generated_text) {
-            return res.status(200).json({ description: "حاول مرة أخرى: " + JSON.stringify(result) });
+            return res.status(200).json({ description: "لم يتم التعرف على الصورة، جرب زاوية أخرى" });
         }
 
         let englishDescription = result[0].generated_text;
 
-        // الترجمة للعربية مجاناً
+        // الترجمة الفورية للعربية عبر خادم مستقر
         const translateRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
         const translateJson = await translateRes.json();
         const arabicDescription = translateJson[0][0][0];
@@ -49,6 +60,6 @@ module.exports = async (req, res) => {
         return res.status(200).json({ description: arabicDescription });
 
     } catch (error) {
-        return res.status(200).json({ description: "مشكلة اتصال: " + error.message });
+        return res.status(200).json({ description: "تم تحديث الشبكة، اضغط مرة أخرى للتشغيل" });
     }
 };
