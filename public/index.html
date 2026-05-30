@@ -3,71 +3,114 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مساعد الرؤية الذكي السحابي</title>
+    <title>مساعد الرؤية الذكي</title>
     <style>
-        body { font-family: sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; background: #faf8f5; }
-        #video { width: 90%; max-width: 500px; border-radius: 15px; background: #000; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        #snap { width: 180px; height: 180px; border-radius: 50%; border: none; background: #10b981; color: white; font-size: 22px; cursor: pointer; margin-top: 20px; box-shadow: 0 8px 15px rgba(16, 185, 129, 0.3); font-weight: bold; }
-        #snap:active { transform: scale(0.95); }
-        #status { margin-top: 20px; font-weight: bold; color: #374151; text-align: center; padding: 0 20px; font-size: 18px; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        #camera-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: 20px;
+            overflow: hidden;
+            background: #1e1e1e;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        video, canvas {
+            width: 100%;
+            display: block;
+        }
+        #btn-desc {
+            background-color: #008744;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 4px 10px rgba(0,135,68,0.4);
+            transition: 0.2s;
+        }
+        #btn-desc:active {
+            transform: scale(0.95);
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 18px;
+            padding: 10px;
+            color: #ccc;
+        }
     </style>
 </head>
 <body>
 
-    <video id="video" autoplay playsinline></video>
-    <button id="snap">اضغط للوصف</button>
-    <div id="status">جاهز للمساعدة...</div>
+    <h2>مساعد الرؤية الذكي</h2>
+    
+    <div id="camera-container">
+        <video id="video" autoplay playsinline></video>
+    </div>
+
+    <button id="btn-desc" onclick="captureImage()">اضغط للوصف</button>
+    <div id="status">المتصفح جاهز، وجه الكاميرا واضغط على الزر.</div>
+
     <canvas id="canvas" style="display:none;"></canvas>
 
     <script>
         const video = document.getElementById('video');
         const canvas = document.getElementById('canvas');
-        const snap = document.getElementById('snap');
         const status = document.getElementById('status');
 
-        async function startCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
-                video.srcObject = stream;
-            } catch (err) {
-                status.innerText = "فشل فتح الكاميرا. تأكد من إعطاء الصلاحية.";
-            }
-        }
+        // تشغيل الكاميرا الخلفية فوراً عند فتح الموقع
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => { status.innerText = "برجاء السماح بالوصول للموقع لاستخدام الكاميرا."; });
 
-        snap.addEventListener('click', async () => {
-            status.innerText = "جاري التقاط الصورة وتحليلها سحابياً...";
-            
+        function captureImage() {
+            status.innerText = "جاري التقاط الصورة...";
             const context = canvas.getContext('2d');
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            const imageData = canvas.toDataURL('image/jpeg');
+            const base64Image = canvas.toDataURL('image/jpeg');
+            describeImage(base64Image);
+        }
+
+        async function describeImage(base64Image) {
+            status.innerText = "جاري تحليل الصورة عبر خادم الموقع المستقر...";
 
             try {
-                const response = await fetch('/api/describe', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image: imageData })
+                const response = await fetch("/api/describe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ image: base64Image })
                 });
 
                 const data = await response.json();
-                if(data.error) throw new Error(data.error);
+                if (data.error) throw new Error(data.error);
 
                 const description = data.description;
                 status.innerText = description;
 
-                const utterance = new SpeechSynthesisUtterance(description);
-                utterance.lang = 'ar-SA';
-                window.speechSynthesis.speak(utterance);
+                // النطق الصوتي التلقائي بالعربية
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(description);
+                    utterance.lang = 'ar-SA';
+                    window.speechSynthesis.speak(utterance);
+                }
 
             } catch (error) {
-                status.innerText = "خطأ: " + error.message;
-                console.error(error);
+                status.innerText = "تنبيه: " + error.message;
             }
-        });
-
-        startCamera();
+        }
     </script>
 </body>
 </html>
