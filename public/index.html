@@ -5,17 +5,55 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>مساعد الرؤية الذكي</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #121212; color: white; text-align: center; padding: 20px; margin: 0; }
-        #camera-container { width: 100%; max-width: 400px; margin: 0 auto; border-radius: 20px; overflow: hidden; background: #1e1e1e; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
-        video, canvas { width: 100%; display: block; }
-        #btn-desc { background-color: #008744; color: white; border: none; padding: 20px 40px; font-size: 20px; font-weight: bold; border-radius: 50px; cursor: pointer; margin-top: 20px; box-shadow: 0 4px 10px rgba(0,135,68,0.4); transition: 0.2s; }
-        #btn-desc:active { transform: scale(0.95); }
-        #status { margin-top: 20px; font-size: 18px; padding: 10px; color: #ccc; }
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #121212;
+            color: white;
+            text-align: center;
+            padding: 20px;
+            margin: 0;
+        }
+        #camera-container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            border-radius: 20px;
+            overflow: hidden;
+            background: #1e1e1e;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        video, canvas {
+            width: 100%;
+            display: block;
+        }
+        #btn-desc {
+            background-color: #008744;
+            color: white;
+            border: none;
+            padding: 20px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 50px;
+            cursor: pointer;
+            margin-top: 20px;
+            box-shadow: 0 4px 10px rgba(0,135,68,0.4);
+            transition: 0.2s;
+        }
+        #btn-desc:active {
+            transform: scale(0.95);
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 18px;
+            padding: 10px;
+            color: #ccc;
+        }
     </style>
 </head>
 <body>
 
     <h2>مساعد الرؤية الذكي</h2>
+    
     <div id="camera-container">
         <video id="video" autoplay playsinline></video>
     </div>
@@ -30,6 +68,7 @@
         const canvas = document.getElementById('canvas');
         const status = document.getElementById('status');
 
+        // تشغيل الكاميرا الخلفية للموبايل فوراً
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; })
             .catch(err => { status.innerText = "برجاء السماح بالوصول للموقع لاستخدام الكاميرا."; });
@@ -46,26 +85,67 @@
         }
 
         async function describeImage(base64Image) {
-            status.innerText = "جاري تحليل الصورة...";
+            status.innerText = "جاري تحليل الصورة بالذكاء الاصطناعي المباشر...";
 
             try {
-                const response = await fetch("/api/describe", {
+                // تحويل الصورة المستلمة إلى صيغة الطلب لـ Hugging Face مباشرة من جهازك
+                const base64Data = base64Image.replace(/^data:image\/jpeg;base64,/, "");
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {type: "image/jpeg"});
+
+                const token = "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";
+
+                // نطلب الـ API مباشرة من الجوال، متخطين سيرفر Vercel ومشاكل الـ DNS الخاصة به
+                const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
+                    headers: { 
+                        "Authorization": `Bearer ${token}`,
+                        "Content-Type": "application/octet-stream"
+                    },
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ image: base64Image })
+                    body: blob
                 });
 
-                const data = await response.json();
-                status.innerText = data.description;
+                const result = await response.json();
+                
+                if (result.error && JSON.stringify(result.error).includes("loading")) {
+                    status.innerText = "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً";
+                    return;
+                }
 
+                if (result.error) {
+                    status.innerText = "الموديل مستهلك حالياً، انتظر لحظات وجرب مجدداً";
+                    return;
+                }
+
+                if (!result || !result[0] || !result[0].generated_text) {
+                    status.innerText = "لم يتم التعرف على الصورة، جرب زاوية أخرى";
+                    return;
+                }
+
+                let englishDescription = result[0].generated_text;
+                status.innerText = "جاري الترجمة الفورية للعربية...";
+
+                // ترجمة مباشرة من خلال المتصفح
+                const translateRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
+                const translateJson = await translateRes.json();
+                const arabicDescription = translateJson[0][0][0];
+
+                status.innerText = arabicDescription;
+
+                // النطق الصوتي التلقائي
                 if ('speechSynthesis' in window) {
-                    const utterance = new SpeechSynthesisUtterance(data.description);
+                    const utterance = new SpeechSynthesisUtterance(arabicDescription);
                     utterance.lang = 'ar-SA';
                     window.speechSynthesis.speak(utterance);
                 }
 
             } catch (error) {
-                status.innerText = "تم تحديث الشبكة، اضغط مرة أخرى للتشغيل.";
+                status.innerText = "حدث خطأ أثناء الاتصال: " + error.message;
             }
         }
     </script>
