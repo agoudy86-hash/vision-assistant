@@ -1,7 +1,7 @@
 const https = require('https');
 
 module.exports = async (req, res) => {
-    // إعدادات الـ CORS للسماح بالاتصال
+    // إعدادات الأمان والسماح بالاتصال من الجوال
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,16 +13,17 @@ module.exports = async (req, res) => {
         const { image } = req.body;
         if (!image) return res.status(200).json({ description: "الرجاء التقاط صورة أولاً" });
 
+        // تنظيف وتحويل الصورة إلى Buffer
         const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
         const token = "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";
 
-        // إرسال البيانات إلى Salesforce BLIP عبر الرابط المصحح
+        // الاتصال المباشر بـ Hugging Face عبر مكتبة https الأمنية
         const huggingFacePromise = new Promise((resolve, reject) => {
             const options = {
                 hostname: 'api-inference.huggingface.co',
-                path: '/models/Salesforce/blip-image-captioning-large', // الحروف الكبيرة للـ S دقيقة هنا
+                path: '/models/Salesforce/blip-image-captioning-large',
                 method: 'POST',
                 headers: {
                     'Authorization': `Bearer ${token}`,
@@ -50,6 +51,7 @@ module.exports = async (req, res) => {
 
         const result = await huggingFacePromise;
 
+        // معالجة فترة استيقاظ الموديل
         if (result.error && JSON.stringify(result.error).includes("loading")) {
             return res.status(200).json({ description: "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً" });
         }
@@ -59,11 +61,12 @@ module.exports = async (req, res) => {
         }
 
         if (!result || !result[0] || !result[0].generated_text) {
-            return res.status(200).json({ description: "لم يتم التعرف على تفاصيل الصورة، جرب زاوية أخرى" });
+            return res.status(200).json({ description: "لم يتم التعرف على الصورة، جرب زاوية أخرى" });
         }
 
         const englishDescription = result[0].generated_text;
 
+        // الترجمة الآمنة عبر السيرفر
         const translatePromise = new Promise((resolve) => {
             https.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`, (resTr) => {
                 let data = '';
@@ -73,10 +76,10 @@ module.exports = async (req, res) => {
                         const json = JSON.parse(data);
                         resolve(json[0][0][0]);
                     } catch(e) {
-                        resolve("الوصف بالإنجليزية: " + englishDescription);
+                        resolve(englishDescription);
                     }
                 });
-            }).on('error', () => resolve("الوصف بالإنجليزية: " + englishDescription));
+            }).on('error', () => resolve(englishDescription));
         });
 
         const arabicDescription = await translatePromise;
