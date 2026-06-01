@@ -21,4 +21,53 @@
     </div>
 
     <button id="btn-desc" onclick="captureImage()">اضغط للوصف</button>
-    <div id="status">المت
+    <div id="status">المتصفح جاهز، وجه الكاميرا واضغط على الزر.</div>
+
+    <canvas id="canvas" style="display:none;"></canvas>
+
+    <script>
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('canvas');
+        const status = document.getElementById('status');
+
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
+            .then(stream => { video.srcObject = stream; })
+            .catch(err => { status.innerText = "برجاء السماح بالوصول للموقع لاستخدام الكاميرا."; });
+
+        function captureImage() {
+            status.innerText = "جاري التقاط الصورة...";
+            const context = canvas.getContext('2d');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            context.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const base64Image = canvas.toDataURL('image/jpeg');
+            describeImage(base64Image);
+        }
+
+        async function describeImage(base64Image) {
+            status.innerText = "جاري تحليل الصورة...";
+
+            try {
+                const response = await fetch("/api/describe", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ image: base64Image })
+                });
+
+                const data = await response.json();
+                status.innerText = data.description;
+
+                if ('speechSynthesis' in window) {
+                    const utterance = new SpeechSynthesisUtterance(data.description);
+                    utterance.lang = 'ar-SA';
+                    window.speechSynthesis.speak(utterance);
+                }
+
+            } catch (error) {
+                status.innerText = "تم تحديث الشبكة، اضغط مرة أخرى للتشغيل.";
+            }
+        }
+    </script>
+</body>
+</html>المت
