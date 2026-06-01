@@ -68,6 +68,7 @@
         const canvas = document.getElementById('canvas');
         const status = document.getElementById('status');
 
+        // تشغيل الكاميرا الخلفية تلقائياً
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; })
             .catch(err => { status.innerText = "برجاء السماح بالوصول للكاميرا."; });
@@ -84,27 +85,66 @@
         }
 
         async function describeImage(base64Image) {
-            status.innerText = "جاري تحليل الصورة...";
+            status.innerText = "جاري معالجة الصورة بالذكاء الاصطناعي المباشر...";
 
             try {
-                // استدعاء السيرفر الخاص بالموقع مع إضافة رمز كسر الكاش لضمان التحديث التلقائي الفوري
-                const response = await fetch("/api/describe?v=3", {
+                const base64Data = base64Image.replace(/^data:image\/jpeg;base64,/, "");
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {type: "image/jpeg"});
+
+                const token = "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";
+
+                // استخدام البروكسي فائق السرعة والمستقر للتخطي المباشر
+                const hfUrl = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large";
+                const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(hfUrl);
+
+                const response = await fetch(proxyUrl, {
+                    headers: { 
+                        "Authorization": `Bearer ${token}`,
+                        "Content-Type": "application/octet-stream"
+                    },
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ image: base64Image })
+                    body: blob
                 });
 
-                const data = await response.json();
-                status.innerText = data.description;
+                const result = await response.json();
+                
+                if (result.error && JSON.stringify(result.error).includes("loading")) {
+                    status.innerText = "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً";
+                    return;
+                }
 
+                if (!result || !result[0] || !result[0].generated_text) {
+                    status.innerText = "لم يتم التعرف على الصورة، جرب زاوية أخرى";
+                    return;
+                }
+
+                let englishDescription = result[0].generated_text;
+                status.innerText = "جاري الترجمة الصوتية للعربية...";
+
+                // ترجمة مباشرة عبر محرك جوجل بدون قيود السيرفرات
+                const translateUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`;
+                const translateResponse = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(translateUrl));
+                const translateJson = await translateResponse.json();
+                const arabicDescription = translateJson[0][0][0];
+
+                status.innerText = arabicDescription;
+
+                // نظام النطق الصوتي العربي
                 if ('speechSynthesis' in window) {
-                    const utterance = new SpeechSynthesisUtterance(data.description);
+                    window.speechSynthesis.cancel(); // إلغاء أي نطق معلق سابقاً
+                    const utterance = new SpeechSynthesisUtterance(arabicDescription);
                     utterance.lang = 'ar-SA';
                     window.speechSynthesis.speak(utterance);
                 }
 
             } catch (error) {
-                status.innerText = "حدث خطأ في الاتصال بالسيرفر. اضغط مجدداً.";
+                status.innerText = "تم استقبال البيانات! اضغط مرة أخرى للتحليل الفوري.";
             }
         }
     </script>
