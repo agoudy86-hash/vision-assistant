@@ -1,6 +1,7 @@
 const https = require('https');
 
 module.exports = async (req, res) => {
+    // إعدادات الـ CORS للسماح للجوال بالاتصال بأمان
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -12,12 +13,14 @@ module.exports = async (req, res) => {
         const { image } = req.body;
         if (!image) return res.status(200).json({ description: "الرجاء التقاط صورة أولاً" });
 
+        // تنظيف وحفظ صيغة الـ Base64 للصورة وتحويلها إلى Buffer
         const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
+        // التوكن السري الخاص بكِ لحساب Hugging Face
         const token = "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";
 
-        // هنا تم تصحيح الرابط بدقة حاسمة إلى huggingface
+        // الاتصال بـ Hugging Face عبر عنوان الرابط المصحح والمستقر
         const huggingFacePromise = new Promise((resolve, reject) => {
             const options = {
                 hostname: 'api-inference.huggingface.co',
@@ -49,6 +52,7 @@ module.exports = async (req, res) => {
 
         const result = await huggingFacePromise;
 
+        // معالجة فترات نوم الموديل (Cold Start)
         if (result.error && JSON.stringify(result.error).includes("loading")) {
             return res.status(200).json({ description: "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً" });
         }
@@ -63,6 +67,7 @@ module.exports = async (req, res) => {
 
         const englishDescription = result[0].generated_text;
 
+        // الترجمة الفورية للعربية عبر محرك جوجل المستقر للسيرفرات
         const translatePromise = new Promise((resolve) => {
             https.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`, (resTr) => {
                 let data = '';
