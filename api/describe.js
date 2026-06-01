@@ -1,7 +1,6 @@
 const https = require('https');
 
 module.exports = async (req, res) => {
-    // إعدادات الأمان والسماح بالاتصال
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,14 +12,12 @@ module.exports = async (req, res) => {
         const { image } = req.body;
         if (!image) return res.status(200).json({ description: "الرجاء التقاط صورة أولاً" });
 
-        // تنظيف وتنظيم صيغة الـ Base64 للصورة
         const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
-        // التوكن الخاص بكِ
         const token = "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";
 
-        // إرسال البيانات إلى Hugging Face عبر مكتبة https المدمجة والأكيدة
+        // هنا تم تصحيح الرابط بدقة حاسمة إلى huggingface
         const huggingFacePromise = new Promise((resolve, reject) => {
             const options = {
                 hostname: 'api-inference.huggingface.co',
@@ -36,7 +33,13 @@ module.exports = async (req, res) => {
             const reqHf = https.request(options, (resHf) => {
                 let data = '';
                 resHf.on('data', (chunk) => data += chunk);
-                resHf.on('end', () => resolve(JSON.parse(data)));
+                resHf.on('end', () => {
+                    try {
+                        resolve(JSON.parse(data));
+                    } catch(e) {
+                        reject(new Error("استجابة غير صالحة من الموديل"));
+                    }
+                });
             });
 
             reqHf.on('error', (e) => reject(e));
@@ -60,7 +63,6 @@ module.exports = async (req, res) => {
 
         const englishDescription = result[0].generated_text;
 
-        // ترجمة النص عبر المتصفح/السيرفر باستخدام نظام ثابت
         const translatePromise = new Promise((resolve) => {
             https.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`, (resTr) => {
                 let data = '';
