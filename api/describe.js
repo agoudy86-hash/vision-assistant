@@ -1,7 +1,7 @@
-const fetch = require('node-fetch');
+const https = require('https');
 
 module.exports = async (req, res) => {
-    // إعدادات الـ CORS للسماح بالاتصال من الجوال بأمان
+    // إعدادات الـ CORS للسماح بالاتصال
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,41 +13,76 @@ module.exports = async (req, res) => {
         const { image } = req.body;
         if (!image) return res.status(200).json({ description: "الرجاء التقاط صورة أولاً" });
 
-        const base64Data = image.replace(/^data:image\/jpeg;base64,/, "");
+        const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
-        // التوكن الخاص بكِ مع رابط Hugging Face الصحيح تماماً بدون أخطاء إملائية
         const token = "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";
 
-        const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
-            headers: { 
-                "Authorization": `Bearer ${token}`,
-                "Content-Type": "application/octet-stream"
-            },
-            method: "POST",
-            body: buffer
+        // إرسال البيانات إلى Salesforce BLIP عبر الرابط المصحح
+        const huggingFacePromise = new Promise((resolve, reject) => {
+            const options = {
+                hostname: 'api-inference.huggingface.co',
+                path: '/models/Salesforce/blip-image-captioning-large', // الحروف الكبيرة للـ S دقيقة هنا
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/octet-stream',
+                    'Content-Length': buffer.length
+                }
+            };
+
+            const reqHf = https.request(options, (resHf) => {
+                let data = '';
+                resHf.on('data', (chunk) => data += chunk);
+                resHf.on('end', () => {
+                    try {
+                        resolve(JSON.parse(data));
+                    } catch(e) {
+                        reject(new Error("استجابة غير صالحة من الموديل"));
+                    }
+                });
+            });
+
+            reqHf.on('error', (e) => reject(e));
+            reqHf.write(buffer);
+            reqHf.end();
         });
 
-        const result = await response.json();
-        
+        const result = await huggingFacePromise;
+
         if (result.error && JSON.stringify(result.error).includes("loading")) {
             return res.status(200).json({ description: "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً" });
         }
 
-        if (!result || !result[0] || !result[0].generated_text) {
-            return res.status(200).json({ description: "لم يتم التعرف على الصورة، جرب زاوية أخرى" });
+        if (result.error) {
+            return res.status(200).json({ description: "الموديل مشغول حالياً، جرب مجدداً خلال لحظات" });
         }
 
-        let englishDescription = result[0].generated_text;
+        if (!result || !result[0] || !result[0].generated_text) {
+            return res.status(200).json({ description: "لم يتم التعرف على تفاصيل الصورة، جرب زاوية أخرى" });
+        }
 
-        // الترجمة الفورية للعربية
-        const translateRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
-        const translateJson = await translateRes.json();
-        const arabicDescription = translateJson[0][0][0];
+        const englishDescription = result[0].generated_text;
 
+        const translatePromise = new Promise((resolve) => {
+            https.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`, (resTr) => {
+                let data = '';
+                resTr.on('data', (chunk) => data += chunk);
+                resTr.on('end', () => {
+                    try {
+                        const json = JSON.parse(data);
+                        resolve(json[0][0][0]);
+                    } catch(e) {
+                        resolve("الوصف بالإنجليزية: " + englishDescription);
+                    }
+                });
+            }).on('error', () => resolve("الوصف بالإنجليزية: " + englishDescription));
+        });
+
+        const arabicDescription = await translatePromise;
         return res.status(200).json({ description: arabicDescription });
 
     } catch (error) {
-        return res.status(200).json({ description: "خطأ في السيرفر: " + error.message });
+        return res.status(200).json({ description: "تنبيه من السيرفر: " + error.message });
     }
 };
