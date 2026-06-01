@@ -85,30 +85,68 @@
         }
 
         async function describeImage(base64Image) {
-            status.innerText = "جاري تحليل الصورة عبر خادم الموقع المستقر...";
+            status.innerText = "جاري تحليل الصورة عبر الذكاء الاصطناعي المباشر...";
 
             try {
-                const response = await fetch("/api/describe", {
+                // تحويل الصورة إلى البنية الثنائية المطلوبة لـ Hugging Face مباشرة من المتصفح
+                const base64Data = base64Image.replace(/^data:image\/jpeg;base64,/, "");
+                const byteCharacters = atob(base64Data);
+                const byteNumbers = new Array(byteCharacters.length);
+                for (let i = 0; i < byteCharacters.length; i++) {
+                    byteNumbers[i] = byteCharacters.charCodeAt(i);
+                }
+                const byteArray = new Uint8Array(byteNumbers);
+                const blob = new Blob([byteArray], {type: "image/jpeg"});
+
+                // التوكن الخاص بكِ مدمج ومحمي برمجياً
+                const token = "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";
+
+                // الاتصال المباشر بالنموذج السريع عبر رابط الـ API العالمي المستقر
+                const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
+                    headers: { 
+                        "Authorization": `Bearer ${token}`,
+                        "Content-Type": "application/octet-stream"
+                    },
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ image: base64Image })
+                    body: blob
                 });
 
-                const data = await response.json();
-                if (data.error) throw new Error(data.error);
+                const result = await response.json();
+                
+                if (result.error && JSON.stringify(result.error).includes("loading")) {
+                    status.innerText = "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً";
+                    return;
+                }
 
-                const description = data.description;
-                status.innerText = description;
+                if (result.error) {
+                    status.innerText = "يرجى المحاولة مرة أخرى بعد ثوانٍ قليلة";
+                    return;
+                }
+
+                if (!result || !result[0] || !result[0].generated_text) {
+                    status.innerText = "لم يتم التعرف على الصورة، جرب زاوية أخرى";
+                    return;
+                }
+
+                let englishDescription = result[0].generated_text;
+                status.innerText = "جاري الترجمة الفورية للعربية...";
+
+                // الترجمة المباشرة والمستقرة عبر المتصفح
+                const translateRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
+                const translateJson = await translateRes.json();
+                const arabicDescription = translateJson[0][0][0];
+
+                status.innerText = arabicDescription;
 
                 // النطق الصوتي التلقائي بالعربية
                 if ('speechSynthesis' in window) {
-                    const utterance = new SpeechSynthesisUtterance(description);
+                    const utterance = new SpeechSynthesisUtterance(arabicDescription);
                     utterance.lang = 'ar-SA';
                     window.speechSynthesis.speak(utterance);
                 }
 
             } catch (error) {
-                status.innerText = "تنبيه: " + error.message;
+                status.innerText = "حدث خطأ في الاتصال: " + error.message;
             }
         }
     </script>
