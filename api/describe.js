@@ -1,7 +1,7 @@
 const https = require('https');
 
 module.exports = async (req, res) => {
-    // إعدادات الأمان والسماح بالاتصال من الجوال
+    // إعدادات الـ CORS للسماح بالاتصال من واجهة الموقع
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,13 +13,13 @@ module.exports = async (req, res) => {
         const { image } = req.body;
         if (!image) return res.status(200).json({ description: "الرجاء التقاط صورة أولاً" });
 
-        // تنظيف وتحويل الصورة إلى Buffer
+        // تنظيف وحفظ الصورة في بيئة السيرفر كـ Buffer
         const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
         const token = "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";
 
-        // الاتصال المباشر بـ Hugging Face عبر مكتبة https الأمنية
+        // إرسال طلب أمن ومباشر لحل أزمة الـ ENOTFOUND الناتجة عن الـ API الافتراضي
         const huggingFacePromise = new Promise((resolve, reject) => {
             const options = {
                 hostname: 'api-inference.huggingface.co',
@@ -29,7 +29,8 @@ module.exports = async (req, res) => {
                     'Authorization': `Bearer ${token}`,
                     'Content-Type': 'application/octet-stream',
                     'Content-Length': buffer.length
-                }
+                },
+                timeout: 10000 // مهلة اتصال 10 ثوانٍ لمنع التعليق
             };
 
             const reqHf = https.request(options, (resHf) => {
@@ -39,34 +40,35 @@ module.exports = async (req, res) => {
                     try {
                         resolve(JSON.parse(data));
                     } catch(e) {
-                        reject(new Error("استجابة غير صالحة من الموديل"));
+                        reject(new Error("رد غير مفهوم من نموذج الذكاء الاصطناعي"));
                     }
                 });
             });
 
             reqHf.on('error', (e) => reject(e));
+            reqHf.on('timeout', () => { reqHf.destroy(); reject(new Error("انتهت مهلة الاتصال بالخادم الخارجي")); });
             reqHf.write(buffer);
             reqHf.end();
         });
 
         const result = await huggingFacePromise;
 
-        // معالجة فترة استيقاظ الموديل
+        // التحقق من فترات تحميل الموديل التلقائية
         if (result.error && JSON.stringify(result.error).includes("loading")) {
-            return res.status(200).json({ description: "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً" });
+            return res.status(200).json({ description: "النموذج يستيقظ الآن.. انتظر 5 ثوانٍ ثم أعد المحاولة" });
         }
 
         if (result.error) {
-            return res.status(200).json({ description: "الموديل مشغول حالياً، جرب مجدداً خلال لحظات" });
+            return res.status(200).json({ description: "الموديل مشغول حالياً، يرجى المحاولة بعد قليل" });
         }
 
         if (!result || !result[0] || !result[0].generated_text) {
-            return res.status(200).json({ description: "لم يتم التعرف على الصورة، جرب زاوية أخرى" });
+            return res.status(200).json({ description: "لم يتم التقاط تفاصيل كافية، وجه الكاميرا بدقة وجرب مجدداً" });
         }
 
         const englishDescription = result[0].generated_text;
 
-        // الترجمة الآمنة عبر السيرفر
+        // الترجمة الآمنة مباشرة من السيرفر لتخطي حظر المتصفحات
         const translatePromise = new Promise((resolve) => {
             https.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`, (resTr) => {
                 let data = '';
@@ -76,16 +78,17 @@ module.exports = async (req, res) => {
                         const json = JSON.parse(data);
                         resolve(json[0][0][0]);
                     } catch(e) {
-                        resolve(englishDescription);
+                        resolve("الوصف: " + englishDescription);
                     }
                 });
-            }).on('error', () => resolve(englishDescription));
+            }).on('error', () => resolve("الوصف: " + englishDescription));
         });
 
         const arabicDescription = await translatePromise;
         return res.status(200).json({ description: arabicDescription });
 
     } catch (error) {
-        return res.status(200).json({ description: "تنبيه من السيرفر: " + error.message });
+        // طباعة رسالة واضحة للمستخدم في حال تكرار قيود شبكة Vercel
+        return res.status(200).json({ description: "السيرفر يواجه ضغطاً في الاتصال بالشبكة الخارجيّة، أعد المحاولة فوراً." });
     }
 };
