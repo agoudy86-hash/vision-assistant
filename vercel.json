@@ -1,7 +1,1 @@
-{
-  "version": 2,
-  "rewrites": [
-    { "source": "/api/describe", "destination": "/api/describe.js" },
-    { "source": "/(.*)", "destination": "/public/$1" }
-  ]
-}
+
