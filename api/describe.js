@@ -1,33 +1,24 @@
 const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
-    // السماح بطلبات الموقع من أي مكان وصيانة الاتصال
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
+    if (req.method === 'OPTIONS') return res.status(200).end();
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
     try {
         const { image } = req.body;
-        if (!image) {
-            return res.status(200).json({ description: "الرجاء التقاط صورة أولاً" });
-        }
+        if (!image) return res.status(200).json({ description: "الرجاء التقاط صورة أولاً" });
 
         const base64Data = image.replace(/^data:image\/jpeg;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
-        // جلب التوكن بأمان من بيئة عمل Vercel
-        const token = process.env.HUGGINGFACE_TOKEN ? process.env.HUGGINGFACE_TOKEN.trim() : '';
+        // التوكن المباشر الخاص بكِ
+        const token = "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";
 
-        // استخدام الرابط البديل المباشر الصريح لفك أزمة الـ DNS العالمية لـ Vercel
-        const response = await fetch("https://api.hf.co/models/Salesforce/blip-image-captioning-large", {
+        const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
             headers: { 
                 "Authorization": `Bearer ${token}`,
                 "Content-Type": "application/octet-stream"
@@ -42,17 +33,13 @@ module.exports = async (req, res) => {
             return res.status(200).json({ description: "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً" });
         }
 
-        if (result.error) {
-            return res.status(200).json({ description: "يرجى المحاولة مرة أخرى بعد ثوانٍ" });
-        }
-
         if (!result || !result[0] || !result[0].generated_text) {
             return res.status(200).json({ description: "لم يتم التعرف على الصورة، جرب زاوية أخرى" });
         }
 
         let englishDescription = result[0].generated_text;
 
-        // الترجمة الفورية للعربية عبر خادم مستقر
+        // الترجمة للعربية
         const translateRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
         const translateJson = await translateRes.json();
         const arabicDescription = translateJson[0][0][0];
@@ -60,6 +47,6 @@ module.exports = async (req, res) => {
         return res.status(200).json({ description: arabicDescription });
 
     } catch (error) {
-        return res.status(200).json({ description: "تم تحديث الشبكة، اضغط مرة أخرى للتشغيل" });
+        return res.status(200).json({ description: "خطأ في السيرفر: " + error.message });
     }
 };
