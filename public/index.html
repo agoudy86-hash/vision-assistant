@@ -68,7 +68,6 @@
         const canvas = document.getElementById('canvas');
         const status = document.getElementById('status');
 
-        // تشغيل الكاميرا الخلفية فوراً
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; })
             .catch(err => { status.innerText = "برجاء السماح بالوصول للموقع لاستخدام الكاميرا."; });
@@ -85,7 +84,7 @@
         }
 
         async function describeImage(base64Image) {
-            status.innerText = "جاري الاتصال الآمن بالذكاء الاصطناعي...";
+            status.innerText = "جاري تحليل الصورة بالذكاء الاصطناعي...";
 
             try {
                 const base64Data = base64Image.replace(/^data:image\/jpeg;base64,/, "");
@@ -99,11 +98,8 @@
 
                 const token = "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";
 
-                // استخدام بروكسي صريح ومفتوح (AllOrigins) لتخطي جدار الـ CORS وحظر الـ DNS تماماً
-                const targetUrl = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large";
-                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`;
-
-                const response = await fetch(proxyUrl, {
+                // استخدام البروكسي المفتوح والمباشرcors-anywhere البديل والأكثر استقراراً للبيانات
+                const response = await fetch("https://cors-anywhere.herokuapp.com/https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
                     headers: { 
                         "Authorization": `Bearer ${token}`,
                         "Content-Type": "application/octet-stream"
@@ -112,19 +108,10 @@
                     body: blob
                 });
 
-                if (!response.ok) {
-                    throw new Error("فشل البروكسي في جلب البيانات، جرب مجدداً");
-                }
-
                 const result = await response.json();
                 
                 if (result.error && JSON.stringify(result.error).includes("loading")) {
                     status.innerText = "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً";
-                    return;
-                }
-
-                if (result.error) {
-                    status.innerText = "الموديل مشغول، انتظر لحظات وجرب مجدداً";
                     return;
                 }
 
@@ -136,15 +123,13 @@
                 let englishDescription = result[0].generated_text;
                 status.innerText = "جاري الترجمة الفورية للعربية...";
 
-                // ترجمة عبر البروكسي لضمان عدم الحظر
-                const translateTarget = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`;
-                const translateResponse = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(translateTarget)}`);
-                const translateJson = await translateResponse.json();
+                // ترجمة مباشرة ومضمونة
+                const translateRes = await fetch(`https://cors-anywhere.herokuapp.com/https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
+                const translateJson = await translateRes.json();
                 const arabicDescription = translateJson[0][0][0];
 
                 status.innerText = arabicDescription;
 
-                // النطق الصوتي التلقائي
                 if ('speechSynthesis' in window) {
                     const utterance = new SpeechSynthesisUtterance(arabicDescription);
                     utterance.lang = 'ar-SA';
@@ -152,7 +137,7 @@
                 }
 
             } catch (error) {
-                status.innerText = "تم التحديث بنجاح! اضغط مرة أخرى للتشغيل الفعلي.";
+                status.innerText = "خطأ في معالجة البيانات، جرب مرة أخرى خلال لحظات.";
             }
         }
     </script>
