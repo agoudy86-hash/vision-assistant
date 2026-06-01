@@ -68,10 +68,9 @@
         const canvas = document.getElementById('canvas');
         const status = document.getElementById('status');
 
-        // تشغيل الكاميرا الخلفية تلقائياً للمستخدم
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; })
-            .catch(err => { status.innerText = "برجاء السماح بالوصول للكاميرا لتشغيل التطبيق بشكل سليم."; });
+            .catch(err => { status.innerText = "برجاء السماح بالوصول للكاميرا."; });
 
         function captureImage() {
             status.innerText = "جاري التقاط الصورة...";
@@ -85,11 +84,11 @@
         }
 
         async function describeImage(base64Image) {
-            status.innerText = "جاري معالجة وتحليل الصورة بالذكاء الاصطناعي...";
+            status.innerText = "جاري معالجة الصورة...";
 
             try {
-                // استدعاء خادمك الخاص على Vercel مع تمرير رمز لكسر الكاش القديم تماماً
-                const response = await fetch("/api/describe?update=true", {
+                // استدعاء مباشر للسيرفر المحلي للموقع بدون بروكسيات وسيطة
+                const response = await fetch("/api/describe", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ image: base64Image })
@@ -98,16 +97,15 @@
                 const data = await response.json();
                 status.innerText = data.description;
 
-                // نظام النطق الفوري باللغة العربية
                 if ('speechSynthesis' in window) {
-                    window.speechSynthesis.cancel(); // مسح أي عمليات نطق معلقة
+                    window.speechSynthesis.cancel();
                     const utterance = new SpeechSynthesisUtterance(data.description);
                     utterance.lang = 'ar-SA';
                     window.speechSynthesis.speak(utterance);
                 }
 
             } catch (error) {
-                status.innerText = "خطأ في معالجة البيانات، جرب الضغط مرة أخرى للتشغيل الفعلي.";
+                status.innerText = "حدث خطأ في الاتصال. اضغط مجدداً للتشغيل.";
             }
         }
     </script>
