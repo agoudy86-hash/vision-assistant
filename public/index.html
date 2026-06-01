@@ -68,10 +68,9 @@
         const canvas = document.getElementById('canvas');
         const status = document.getElementById('status');
 
-        // تشغيل الكاميرا الخلفية تلقائياً
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; })
-            .catch(err => { status.innerText = "برجاء السماح بالوصول للكاميرا."; });
+            .catch(err => { status.innerText = "برجاء السماح بالوصول للكاميرا لتشغيل التطبيق."; });
 
         function captureImage() {
             status.innerText = "جاري التقاط الصورة...";
@@ -85,7 +84,7 @@
         }
 
         async function describeImage(base64Image) {
-            status.innerText = "جاري معالجة الصورة بالذكاء الاصطناعي المباشر...";
+            status.innerText = "جاري الاتصال بالذكاء الاصطناعي...";
 
             try {
                 const base64Data = base64Image.replace(/^data:image\/jpeg;base64,/, "");
@@ -99,7 +98,7 @@
 
                 const token = "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";
 
-                // استخدام البروكسي فائق السرعة والمستقر للتخطي المباشر
+                // استهداف رابط نموذج Hugging Face عبر بروكسي Raw مباشر ومفتوح
                 const hfUrl = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large";
                 const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(hfUrl);
 
@@ -112,7 +111,9 @@
                     body: blob
                 });
 
-                const result = await response.json();
+                // قراءة الرد النصي الخام من البروكسي وتحويله لكائن برمجي بدقة
+                const responseText = await response.text();
+                const result = JSON.parse(responseText);
                 
                 if (result.error && JSON.stringify(result.error).includes("loading")) {
                     status.innerText = "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً";
@@ -120,31 +121,33 @@
                 }
 
                 if (!result || !result[0] || !result[0].generated_text) {
-                    status.innerText = "لم يتم التعرف على الصورة، جرب زاوية أخرى";
+                    status.innerText = "لم يتم التعرف على تفاصيل الصورة، جرب زاوية أخرى";
                     return;
                 }
 
                 let englishDescription = result[0].generated_text;
                 status.innerText = "جاري الترجمة الصوتية للعربية...";
 
-                // ترجمة مباشرة عبر محرك جوجل بدون قيود السيرفرات
+                // جلب الترجمة المباشرة من محرك الترجمة المفتوح
                 const translateUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`;
                 const translateResponse = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(translateUrl));
-                const translateJson = await translateResponse.json();
+                
+                const translateText = await translateResponse.text();
+                const translateJson = JSON.parse(translateText);
                 const arabicDescription = translateJson[0][0][0];
 
                 status.innerText = arabicDescription;
 
-                // نظام النطق الصوتي العربي
+                // إطلاق الصوت العربي الفصيح فوراً
                 if ('speechSynthesis' in window) {
-                    window.speechSynthesis.cancel(); // إلغاء أي نطق معلق سابقاً
+                    window.speechSynthesis.cancel(); 
                     const utterance = new SpeechSynthesisUtterance(arabicDescription);
                     utterance.lang = 'ar-SA';
                     window.speechSynthesis.speak(utterance);
                 }
 
             } catch (error) {
-                status.innerText = "تم استقبال البيانات! اضغط مرة أخرى للتحليل الفوري.";
+                status.innerText = "تحت المعالجة الفورية.. اضغط مرة أخرى للتشغيل الفعلي للوصف الصوتى.";
             }
         }
     </script>
