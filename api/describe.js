@@ -1,6 +1,7 @@
 const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
+    // إعدادات الـ CORS للسماح بالاتصال من الجوال بأمان
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -15,7 +16,7 @@ module.exports = async (req, res) => {
         const base64Data = image.replace(/^data:image\/jpeg;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
-        // التوكن الخاص بكِ
+        // التوكن الخاص بكِ مع رابط Hugging Face الصحيح تماماً بدون أخطاء إملائية
         const token = "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";
 
         const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
@@ -39,7 +40,7 @@ module.exports = async (req, res) => {
 
         let englishDescription = result[0].generated_text;
 
-        // الترجمة للعربية
+        // الترجمة الفورية للعربية
         const translateRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
         const translateJson = await translateRes.json();
         const arabicDescription = translateJson[0][0][0];
