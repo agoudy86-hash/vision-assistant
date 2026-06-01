@@ -70,7 +70,7 @@
 
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; })
-            .catch(err => { status.innerText = "برجاء السماح بالوصول للموقع لاستخدام الكاميرا."; });
+            .catch(err => { status.innerText = "برجاء السماح بالوصول للكاميرا."; });
 
         function captureImage() {
             status.innerText = "جاري التقاط الصورة...";
@@ -84,60 +84,27 @@
         }
 
         async function describeImage(base64Image) {
-            status.innerText = "جاري تحليل الصورة بالذكاء الاصطناعي...";
+            status.innerText = "جاري تحليل الصورة...";
 
             try {
-                const base64Data = base64Image.replace(/^data:image\/jpeg;base64,/, "");
-                const byteCharacters = atob(base64Data);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) {
-                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], {type: "image/jpeg"});
-
-                const token = "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";
-
-                // استخدام البروكسي المفتوح والمباشرcors-anywhere البديل والأكثر استقراراً للبيانات
-                const response = await fetch("https://cors-anywhere.herokuapp.com/https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
-                    headers: { 
-                        "Authorization": `Bearer ${token}`,
-                        "Content-Type": "application/octet-stream"
-                    },
+                // استدعاء السيرفر الخاص بالموقع مع إضافة رمز كسر الكاش لضمان التحديث التلقائي الفوري
+                const response = await fetch("/api/describe?v=3", {
                     method: "POST",
-                    body: blob
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ image: base64Image })
                 });
 
-                const result = await response.json();
-                
-                if (result.error && JSON.stringify(result.error).includes("loading")) {
-                    status.innerText = "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً";
-                    return;
-                }
-
-                if (!result || !result[0] || !result[0].generated_text) {
-                    status.innerText = "لم يتم التعرف على الصورة، جرب زاوية أخرى";
-                    return;
-                }
-
-                let englishDescription = result[0].generated_text;
-                status.innerText = "جاري الترجمة الفورية للعربية...";
-
-                // ترجمة مباشرة ومضمونة
-                const translateRes = await fetch(`https://cors-anywhere.herokuapp.com/https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
-                const translateJson = await translateRes.json();
-                const arabicDescription = translateJson[0][0][0];
-
-                status.innerText = arabicDescription;
+                const data = await response.json();
+                status.innerText = data.description;
 
                 if ('speechSynthesis' in window) {
-                    const utterance = new SpeechSynthesisUtterance(arabicDescription);
+                    const utterance = new SpeechSynthesisUtterance(data.description);
                     utterance.lang = 'ar-SA';
                     window.speechSynthesis.speak(utterance);
                 }
 
             } catch (error) {
-                status.innerText = "خطأ في معالجة البيانات، جرب مرة أخرى خلال لحظات.";
+                status.innerText = "حدث خطأ في الاتصال بالسيرفر. اضغط مجدداً.";
             }
         }
     </script>
