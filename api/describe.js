@@ -1,7 +1,6 @@
-const https = require('https');
+const fetch = require('node-fetch');
 
 module.exports = async (req, res) => {
-    // إعدادات الـ CORS للسماح للجوال بالاتصال بأمان
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
@@ -13,80 +12,41 @@ module.exports = async (req, res) => {
         const { image } = req.body;
         if (!image) return res.status(200).json({ description: "الرجاء التقاط صورة أولاً" });
 
-        // تنظيف وحفظ صيغة الـ Base64 للصورة وتحويلها إلى Buffer
-        const base64Data = image.replace(/^data:image\/\w+;base64,/, "");
+        const base64Data = image.replace(/^data:image\/jpeg;base64,/, "");
         const buffer = Buffer.from(base64Data, 'base64');
         
-        // التوكن السري الخاص بكِ لحساب Hugging Face
+        // التوكن الخاص بكِ
         const token = "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";
 
-        // الاتصال بـ Hugging Face عبر عنوان الرابط المصحح والمستقر
-        const huggingFacePromise = new Promise((resolve, reject) => {
-            const options = {
-                hostname: 'api-inference.huggingface.co',
-                path: '/models/Salesforce/blip-image-captioning-large',
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/octet-stream',
-                    'Content-Length': buffer.length
-                }
-            };
-
-            const reqHf = https.request(options, (resHf) => {
-                let data = '';
-                resHf.on('data', (chunk) => data += chunk);
-                resHf.on('end', () => {
-                    try {
-                        resolve(JSON.parse(data));
-                    } catch(e) {
-                        reject(new Error("استجابة غير صالحة من الموديل"));
-                    }
-                });
-            });
-
-            reqHf.on('error', (e) => reject(e));
-            reqHf.write(buffer);
-            reqHf.end();
+        const response = await fetch("https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large", {
+            headers: { 
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/octet-stream"
+            },
+            method: "POST",
+            body: buffer
         });
 
-        const result = await huggingFacePromise;
-
-        // معالجة فترات نوم الموديل (Cold Start)
+        const result = await response.json();
+        
         if (result.error && JSON.stringify(result.error).includes("loading")) {
             return res.status(200).json({ description: "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً" });
         }
 
-        if (result.error) {
-            return res.status(200).json({ description: "الموديل مشغول حالياً، جرب مجدداً خلال لحظات" });
-        }
-
         if (!result || !result[0] || !result[0].generated_text) {
-            return res.status(200).json({ description: "لم يتم التعرف على تفاصيل الصورة، جرب زاوية أخرى" });
+            return res.status(200).json({ description: "لم يتم التعرف على الصورة، جرب زاوية أخرى" });
         }
 
-        const englishDescription = result[0].generated_text;
+        let englishDescription = result[0].generated_text;
 
-        // الترجمة الفورية للعربية عبر محرك جوجل المستقر للسيرفرات
-        const translatePromise = new Promise((resolve) => {
-            https.get(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`, (resTr) => {
-                let data = '';
-                resTr.on('data', (chunk) => data += chunk);
-                resTr.on('end', () => {
-                    try {
-                        const json = JSON.parse(data);
-                        resolve(json[0][0][0]);
-                    } catch(e) {
-                        resolve("الوصف بالإنجليزية: " + englishDescription);
-                    }
-                });
-            }).on('error', () => resolve("الوصف بالإنجليزية: " + englishDescription));
-        });
+        // الترجمة للعربية
+        const translateRes = await fetch(`https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`);
+        const translateJson = await translateRes.json();
+        const arabicDescription = translateJson[0][0][0];
 
-        const arabicDescription = await translatePromise;
         return res.status(200).json({ description: arabicDescription });
 
     } catch (error) {
-        return res.status(200).json({ description: "تنبيه من السيرفر: " + error.message });
+        return res.status(200).json({ description: "خطأ في السيرفر: " + error.message });
     }
 };
