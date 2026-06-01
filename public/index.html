@@ -68,9 +68,10 @@
         const canvas = document.getElementById('canvas');
         const status = document.getElementById('status');
 
+        // تشغيل الكاميرا الخلفية تلقائياً للمستخدم
         navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } })
             .then(stream => { video.srcObject = stream; })
-            .catch(err => { status.innerText = "برجاء السماح بالوصول للكاميرا لتشغيل التطبيق."; });
+            .catch(err => { status.innerText = "برجاء السماح بالوصول للكاميرا لتشغيل التطبيق بشكل سليم."; });
 
         function captureImage() {
             status.innerText = "جاري التقاط الصورة...";
@@ -84,70 +85,29 @@
         }
 
         async function describeImage(base64Image) {
-            status.innerText = "جاري الاتصال بالذكاء الاصطناعي...";
+            status.innerText = "جاري معالجة وتحليل الصورة بالذكاء الاصطناعي...";
 
             try {
-                const base64Data = base64Image.replace(/^data:image\/jpeg;base64,/, "");
-                const byteCharacters = atob(base64Data);
-                const byteNumbers = new Array(byteCharacters.length);
-                for (let i = 0; i < byteCharacters.length; i++) {
-                    byteNumbers[i] = byteCharacters.charCodeAt(i);
-                }
-                const byteArray = new Uint8Array(byteNumbers);
-                const blob = new Blob([byteArray], {type: "image/jpeg"});
-
-                const token = "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";
-
-                // استهداف رابط نموذج Hugging Face عبر بروكسي Raw مباشر ومفتوح
-                const hfUrl = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large";
-                const proxyUrl = "https://api.allorigins.win/raw?url=" + encodeURIComponent(hfUrl);
-
-                const response = await fetch(proxyUrl, {
-                    headers: { 
-                        "Authorization": `Bearer ${token}`,
-                        "Content-Type": "application/octet-stream"
-                    },
+                // استدعاء خادمك الخاص على Vercel مع تمرير رمز لكسر الكاش القديم تماماً
+                const response = await fetch("/api/describe?update=true", {
                     method: "POST",
-                    body: blob
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ image: base64Image })
                 });
 
-                // قراءة الرد النصي الخام من البروكسي وتحويله لكائن برمجي بدقة
-                const responseText = await response.text();
-                const result = JSON.parse(responseText);
-                
-                if (result.error && JSON.stringify(result.error).includes("loading")) {
-                    status.innerText = "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً";
-                    return;
-                }
+                const data = await response.json();
+                status.innerText = data.description;
 
-                if (!result || !result[0] || !result[0].generated_text) {
-                    status.innerText = "لم يتم التعرف على تفاصيل الصورة، جرب زاوية أخرى";
-                    return;
-                }
-
-                let englishDescription = result[0].generated_text;
-                status.innerText = "جاري الترجمة الصوتية للعربية...";
-
-                // جلب الترجمة المباشرة من محرك الترجمة المفتوح
-                const translateUrl = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDescription)}`;
-                const translateResponse = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(translateUrl));
-                
-                const translateText = await translateResponse.text();
-                const translateJson = JSON.parse(translateText);
-                const arabicDescription = translateJson[0][0][0];
-
-                status.innerText = arabicDescription;
-
-                // إطلاق الصوت العربي الفصيح فوراً
+                // نظام النطق الفوري باللغة العربية
                 if ('speechSynthesis' in window) {
-                    window.speechSynthesis.cancel(); 
-                    const utterance = new SpeechSynthesisUtterance(arabicDescription);
+                    window.speechSynthesis.cancel(); // مسح أي عمليات نطق معلقة
+                    const utterance = new SpeechSynthesisUtterance(data.description);
                     utterance.lang = 'ar-SA';
                     window.speechSynthesis.speak(utterance);
                 }
 
             } catch (error) {
-                status.innerText = "تحت المعالجة الفورية.. اضغط مرة أخرى للتشغيل الفعلي للوصف الصوتى.";
+                status.innerText = "خطأ في معالجة البيانات، جرب الضغط مرة أخرى للتشغيل الفعلي.";
             }
         }
     </script>
