@@ -100,9 +100,9 @@
             <video id="video" autoplay playsinline></video>
         </div>
 
-        <button id="btn-action" onclick="processVision()">إضغط لتحليل المشهد بصوتياً</button>
+        <button id="btn-action" onclick="processVision()">إضغط لتحليل المشهد صوتياً</button>
         
-        <div id="status-box" id="status">المتصفح جاهز بالكامل. وجه الكاميرا واضغط الزر العلوي.</div>
+        <div id="status-box">المتصفح جاهز بالكامل. وجه الكاميرا واضغط الزر العلوي.</div>
     </div>
 
     <canvas id="canvas" style="display:none;"></canvas>
@@ -112,72 +112,65 @@
         const canvas = document.getElementById('canvas');
         const statusBox = document.getElementById('status-box');
 
-        // تشغيل الكاميرا الخلفية للموبايل بأعلى دقة ممكنة
         navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } } 
+            video: { facingMode: "environment" } 
         })
         .then(stream => { video.srcObject = stream; })
         .catch(err => { 
-            statusBox.innerHTML = "<span style='color:#ff4444;'>تنبيه: يرجى إعطاء صلاحية الوصول للكاميرا من إعدادات المتصفح للتشغيل.</span>"; 
+            statusBox.innerHTML = "<span style='color:#ff4444;'>تنبيه: يرجى إعطاء صلاحية الوصول للكاميرا.</span>"; 
         });
 
         async function processVision() {
-            speak("جاري التقاط الصورة وتحليلها");
-            statusBox.innerHTML = "<span class='loading-dots'>جاري التقاط الصورة بدقة ومعالجتها بالذكاء الاصطناعي</span>";
+            speak("جاري التقاط الصورة");
+            statusBox.innerHTML = "<span class='loading-dots'>جاري معالجة المشهد بالذكاء الاصطناعي</span>";
             
-            // التقاط الصورة من الكاميرا بدقة
             const context = canvas.getContext('2d');
             canvas.width = video.videoWidth || 640;
             canvas.height = video.videoHeight || 480;
             context.drawImage(video, 0, 0, canvas.width, canvas.height);
             
-            // تحويل الصورة إلى البنية الثنائية المباشرة (Blob) لسرعة النقل
-            canvas.toBlob(async (blob) => {
-                if(!blob) {
-                    statusBox.innerText = "فشل التقاط الصورة، يرجى المحاولة مرة أخرى.";
-                    return;
-                }
-                await analyzeImage(blob);
-            }, 'image/jpeg', 0.9);
+            // تحويل الصورة لنص Base64 مباشرة لتفادي مشاكل الأجهزة
+            const base64Image = canvas.toDataURL('image/jpeg', 0.8);
+            const base64Data = base64Image.split(',')[1];
+            
+            await analyzeImage(base64Data);
         }
 
-        async function analyzeImage(imageBlob) {
-            // توكن الوصول الآمن للنموذج العصبى المتطور لـ Hugging Face
+        async function analyzeImage(base64Data) {
             const token = "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";
             const modelUrl = "https://api-inference.huggingface.co/models/Salesforce/blip-image-captioning-large";
-            
-            // الالتفاف حول جدران حماية المتصفحات وحظر الشبكات باستعمال البروكسي الخام المستقر
             const secureProxy = "https://api.allorigins.win/raw?url=" + encodeURIComponent(modelUrl);
 
             try {
+                // تحويل النص إلى Binary داخل الطلب نفسه
+                const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+
                 const response = await fetch(secureProxy, {
                     method: "POST",
                     headers: { 
                         "Authorization": `Bearer ${token}`,
                         "Content-Type": "application/octet-stream"
                     },
-                    body: imageBlob
+                    body: binaryData
                 });
 
                 const rawText = await response.text();
                 const result = JSON.parse(rawText);
 
-                // معالجة حالة استيقاظ السيرفر الذكي تلقائياً
                 if (result.error && JSON.stringify(result.error).includes("loading")) {
-                    statusBox.innerText = "الذكاء الاصطناعي يستعد ويقوم بتحميل البيانات.. انتظر 5 ثوانٍ واضغط مجدداً.";
-                    speak("الذكاء الاصطناعي يستعد، أعد المحاولة بعد قليل");
+                    statusBox.innerText = "الذكاء الاصطناعي يستعد.. انتظر 5 ثوانٍ واضغط مجدداً.";
+                    speak("الذكاء الاصطناعي يستعد، أعد المحاولة");
                     return;
                 }
 
                 if (!result || !result[0] || !result[0].generated_text) {
-                    statusBox.innerText = "لم تظهر تفاصيل واضحة، يرجى تغيير زاوية التصوير أو الإضاءة.";
+                    statusBox.innerText = "لم تظهر تفاصيل واضحة، أعد المحاولة.";
                     return;
                 }
 
                 const englishDesc = result[0].generated_text;
-                statusBox.innerHTML = "<span class='loading-dots'>تم التحليل الفني للمشهد، جاري ترجمته صوتياً</span>";
+                statusBox.innerHTML = "<span class='loading-dots'>جاري الترجمة الفورية</span>";
 
-                // تمرير النص لمحرك الترجمة الفورية عالي الدقة
                 const translateApi = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=ar&dt=t&q=${encodeURIComponent(englishDesc)}`;
                 const translateResponse = await fetch("https://api.allorigins.win/raw?url=" + encodeURIComponent(translateApi));
                 const translateText = await translateResponse.text();
@@ -185,23 +178,20 @@
                 
                 const arabicDesc = translateJson[0][0][0];
 
-                // عرض النتيجة النهائية للمستخدم ونطقها فوراً
-                statusBox.innerHTML = `<strong>الوصف الذكي للمشهد:</strong><br>${arabicDesc}`;
+                statusBox.innerHTML = `<strong>الوصف الذكي:</strong><br>${arabicDesc}`;
                 speak(arabicDesc);
 
             } catch (error) {
-                statusBox.innerText = "تم استقبال رد خادم المعالجة بنجاح! اضغط مرة أخرى للتأكيد وسماع الوصف الفوري.";
+                // طباعة الخطأ الفعلي الحادث بدلاً من الرسالة القديمة المضللة
+                statusBox.innerText = "خطأ تشغيلي: " + error.message + ". اضغط مجدداً لتخطي الحماية.";
             }
         }
 
-        // دالة النطق الصوتي العربي الفصيح والمستقر لجميع أنواع الهواتف
         function speak(text) {
             if ('speechSynthesis' in window) {
-                window.speechSynthesis.cancel(); // إنهاء أي نطق متبقي لمنع التداخل
+                window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(text);
                 utterance.lang = 'ar-SA';
-                utterance.pitch = 1.0;
-                utterance.rate = 1.0;
                 window.speechSynthesis.speak(utterance);
             }
         }
